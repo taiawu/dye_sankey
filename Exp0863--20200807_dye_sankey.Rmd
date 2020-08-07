@@ -322,9 +322,15 @@ exit_values <- read_csv("Exp0863--20200807_exit_point_values.csv")
 hit_rate <- readRDS("Exp0810--20200527_dye_hit_rate_after_recall.rds")
 screen_outcome <- read_csv("Exp0810--20200416_all_screen_hits_v5.csv")
 
+node_order <- df_test %>% 
+              select(start:full_lib,  exit_point, exit_reason) %>%
+              names() %>%
+              factor( . , levels = (.))
+node_order
+
 df <- hit_rate %>%
   left_join(screen_outcome %>% select(dye, detect_ever, reject_buffer)) %>%
-  left_join(df_test %>% select(Class, dye, start, start_join,full_lib,  exit_point, exit_reason)) %>%
+  left_join(df_test %>% select(Class, dye, start, start_join:full_lib,  exit_point, exit_reason)) %>%
   arrange(Class, dye_order_num) %>%
   mutate(Class_order = c(1:nrow(.))) %>%
   mutate_at("start", as.numeric) %>%
@@ -333,51 +339,64 @@ df <- hit_rate %>%
 df
 ```
 ```{r}
-df_long <- df %>%
-  pivot_longer(cols = c(start, start_join, full_lib), names_to = "check_point", values_to = "xvalue") %>%
-  group_by(xvalue, check_point)%>%
-  mutate(yvalue = row_number())
 
-df
 
-df_long1 <- df  %>%
-         pivot_longer(cols = c(start, start_join), names_to = "check_point", values_to = "xvalue") %>%
-          filter(check_point == "start") %>%
-          mutate(yvalue = Class_order)
+df_long_raw <- df %>%
+  pivot_longer(cols = start:full_lib, names_to = "check_point", values_to = "xvalue") %>%
+  mutate(check_point = factor(check_point, levels = node_order)) %>%
+  filter(is.na(xvalue) == FALSE) %>%
+  #group_by(check_point, xvalue) %>%
+  group_by(xvalue) %>%
+  arrange(dye_order_num) %>%
+  mutate(yvalue = row_number()) %>%
+  mutate(yvalue_center = median(yvalue))
 
-df_long2 <- df  %>%
-         pivot_longer(cols = c(start, start_join), names_to = "check_point", values_to = "xvalue") %>%
-          filter(check_point == "start_join") %>%
-          mutate(yvalue = dye_order_num)
+df_long_raw %>%
+  filter(xvalue == 0.6)
+  
 
-df_long3 <- df  %>%
-         pivot_longer(cols = c(start, start_join), names_to = "check_point", values_to = "xvalue") %>%
-          filter(check_point == "start_join") %>%
-          mutate(yvalue = dye_order_num)
+# y_correction <- df_long_raw %>% 
+#                nest() %>%
+#               arrange(check_point, xvalue) %>%
+#   select(-data) %>%
+#  arrange(check_point, xvalue)
+# y_correction
 
-full_lib
-# %>%
-  # pivot_longer(cols = c(Class_order, dye_order_num), names_to =  "yvar", values_to = "yvalue")
+y_correction <- tibble("check_point" = df_long_raw$check_point %>% unique,
+                       "corr" = c(-100, 100, 100, 100, 100, 100, 100, 100, 100, 100)) 
+      
 
-df_long <- bind_rows(df_long1, df_long2) %>%
-  group_by( xvalue, check_point) %>%
-  arrange(check_point, dye_order_num) %>%
-  mutate(moving_y_val = row_number())
+y_correction
 
-df_long %>%
-  filter(xvalue == 0.9)
+df_long <- df_long_raw %>%
+            left_join(y_correction, by = "check_point") %>%
+            mutate(yvalue_corr = yvalue + 10*xvalue + corr - yvalue_center) 
+
+# df_long <- df %>%
+#   pivot_longer(cols = start:full_lib, names_to = "check_point", values_to = "xvalue") %>%
+#   filter(is.na(xvalue) == FALSE) %>%
+#   group_by(check_point, xvalue) %>%
+#   nest()
+# 
+# df_long %>%
+#   arrange(xvalue)
+
 ```
 
 
 ```{r}
 df_long %>%
-  filter(detect_ever == 1) %>%
-  ggplot(aes(x = xvalue, y = yvalue,  color = dye_order_num, group = dye)) + #
-  geom_line(data = df_long, aes(x = xvalue, y = yvalue, group = dye), color = "lightgrey") +
+  ungroup() %>%
+  filter(detect_ever == 1,
+         reject_buffer != 1) %>%
+  ggplot(aes(x = xvalue, y = yvalue_corr,  color = dye_order_num, group = dye)) + #
+  geom_line(data = df_long, aes(x = xvalue, y = yvalue_corr, group = dye), color = "lightgrey") +
+   geom_line(data = df_long %>% filter(reject_buffer == 1), aes(x = xvalue, y = yvalue_corr, group = dye), color = "darkgrey") +
   geom_line() +
   # geom_point() +
   # geom_point(data = df %>% filter(detect_ever == 1), shape = 1, size = 2) +
-  scale_color_viridis_c() 
+  scale_color_viridis_c()
+
 ```
 
 
