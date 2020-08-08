@@ -277,7 +277,6 @@ df_long_out %>%
 p
 
 ggsave("test_sankey.pdf", p, width = 12, height = 7)
-
 ```
 
 
