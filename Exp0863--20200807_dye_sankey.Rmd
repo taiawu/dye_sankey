@@ -10,7 +10,7 @@ Will explore at least:
 - ggplot with geom_smooth and scale_color_viridis_d 
 
 ```{r}
-library(networkD3)
+#library(networkD3)
 library(tidyverse)
 ```
 Read in the relevant data
@@ -338,13 +338,99 @@ df <- hit_rate %>%
 df
 ```
 ```{r}
+make_node <- function( df, filter_var, node_name, xvalue_in, distinct_var){
+                    filter_call <- rlang::parse_expr(filter_var)
+                    distinct_call <- rlang::parse_expr(distinct_var)
+                    
+                    df %>% 
+                        ungroup() %>%
+                        filter(!!filter_call) %>%
+                        distinct(!!distinct_call, .keep_all = TRUE) %>%
+                        mutate(check_point = node_name,
+                                xvalue = xvalue_in)
+                          }
+
+make_node_map <- function(df, var_list) {
+                                make_node( df, 
+                                           filter_var = var_list$filter_var, 
+                                           node_name = var_list$node_name, 
+                                           xvalue_in = var_list$xvalue_in, 
+                                           distinct_var = "dye")
+                              }
+
+
+```
+
+
+```{r}
+
 
 
 df_long_raw <- df %>%
   pivot_longer(cols = start:full_lib, names_to = "check_point", values_to = "xvalue") %>%
 
   mutate(check_point = factor(check_point, levels = node_order)) %>%
-  filter(is.na(xvalue) == FALSE) %>%
+  filter(is.na(xvalue) == FALSE)
+
+never_hit <- df_long_raw %>% 
+              ungroup() %>%
+              filter(detect_ever == 0,
+                     reject_buffer == 0) %>%
+               distinct(dye, .keep_all = TRUE) %>%
+              mutate(check_point = "never_hit",
+                     xvalue = 1.7)
+
+hit_ever <- df_long_raw %>% 
+              ungroup() %>%
+              filter(detect_ever == 1) %>%
+               distinct(dye, .keep_all = TRUE) %>%
+              mutate(check_point = "hit_ever",
+                     xvalue = 2)
+
+bad_buffer <- df_long_raw %>% 
+              ungroup() %>%
+              filter(detect_ever == 1,
+                     reject_buffer == 1) %>%
+               distinct(dye, .keep_all = TRUE) %>%
+              mutate(check_point = "t_sens",
+                     xvalue = 2.2)
+
+hitters1 <- df_long_raw %>% 
+              ungroup() %>%
+              filter(detect_ever == 1,
+                     reject_buffer == 0) %>%
+               distinct(dye, .keep_all = TRUE) %>%
+              mutate(check_point = "hitters",
+                     xvalue = 2.1)
+
+hitters2 <- df_long_raw %>% 
+              ungroup() %>%
+              filter(detect_ever == 1,
+                     reject_buffer == 0) %>%
+               distinct(dye, .keep_all = TRUE) %>%
+              mutate(check_point = "hitters",
+                     xvalue = 2.5)
+
+tech1 <-   df_long_raw %>% 
+              ungroup() %>%
+              filter(detect_ever == 1,
+                     hit1_rate >10,
+                     reject_buffer == 0) %>%
+               distinct(dye, .keep_all = TRUE) %>%
+              mutate(check_point = "tech1",
+                     xvalue = 3.5)
+
+tech2 <-   df_long_raw %>% 
+              ungroup() %>%
+              filter(detect_ever == 1,
+                     hit1_rate <10,
+                     reject_buffer == 0) %>%
+               distinct(dye, .keep_all = TRUE) %>%
+              mutate(check_point = "tech2",
+                     xvalue = 3)
+
+df_long <- df_long_raw %>%
+  bind_rows(never_hit, hit_ever, bad_buffer, hitters1, hitters2, tech1, tech2) %>%
   #group_by(check_point, xvalue) %>%
   group_by(xvalue) %>%
   arrange(dye_order_num) %>%
@@ -352,58 +438,79 @@ df_long_raw <- df %>%
   mutate(yvalue_center = median(yvalue))
 
 
-
 set_corr <- function( val ) {
   if (val == "start") {corr <- -100
-  } else if (val == "trash") {corr <- -200
-  } else if (val == "tech1") {corr <- 200
+  } else if (val == "never_hit") {corr <- -200
+  } else if (val == "hit_ever") {corr <- 250
+  } else if (val == "t_sens") {corr <- 50
+  } else if (val == "hitters") {corr <- 250
+  } else if (val == "tech1") {corr <- 300
+  } else if (val == "tech2") {corr <- 150
   } else {
     corr <- 100
   }
 }
-  
 
-# y_correction <- df_long_raw %>% 
-#                nest() %>%
-#               arrange(check_point, xvalue) %>%
-#   select(-data) %>%
-#  arrange(check_point, xvalue)
-# y_correction
 
-y_correction <- tibble("check_point" = df_long_raw$check_point %>% unique) %>%
-                    mutate("corr" = lapply(check_point, set_corr) %>% as_vector() ) #c(-100, 100, 100, 100, 100, 100, 100, 100, 100, 100)) 
-      
+y_correction <- tibble("check_point" = df_long$check_point %>% unique) %>%
+                    mutate("corr" = lapply(check_point, set_corr) %>% as_vector() ) 
 
-y_correction
-
-df_long <- df_long_raw %>%
+df_long_out <- df_long %>%
             left_join(y_correction, by = "check_point") %>%
             mutate(yvalue_corr = yvalue + 10*xvalue + corr - yvalue_center) 
-
-# df_long <- df %>%
-#   pivot_longer(cols = start:full_lib, names_to = "check_point", values_to = "xvalue") %>%
-#   filter(is.na(xvalue) == FALSE) %>%
-#   group_by(check_point, xvalue) %>%
-#   nest()
-# 
-# df_long %>%
-#   arrange(xvalue)
-
 ```
 
-
 ```{r}
-df_long %>%
+node1 <- list(filter_var = "detect_ever == 1",# "detect_ever == 01 & reject_buffer== 0", 
+                  node_name = "ever_hit",
+                  xvalue_in = 1.9) %>%
+               make_node_map(df = df_long_raw %>% ungroup(),  var_list = .)
+
+df_long <- df_long_raw %>%
+              #bind_rows(node1) %>%
+            group_by(xvalue) %>%
+            arrange(dye_order_num) %>%
+            mutate(yvalue = row_number()) %>%
+            mutate(yvalue_center = median(yvalue))
+  
+  y_correction <- tibble("check_point" = df_long$check_point %>% unique) %>%
+                    mutate("corr" = lapply(check_point, set_corr) %>% as_vector() ) 
+
+df_long_out2 <- df_long %>%
+                  left_join(y_correction, by = "check_point") %>%
+                    mutate(yvalue_corr = yvalue + 10*xvalue + corr - yvalue_center) 
+
+df_long_out2 %>%
   ungroup() %>%
   filter(detect_ever == 1,
          reject_buffer != 1) %>%
   ggplot(aes(x = xvalue, y = yvalue_corr,  color = dye_order_num, group = dye)) + #
-  geom_line(data = df_long, aes(x = xvalue, y = yvalue_corr, group = dye), color = "lightgrey") +
-   geom_line(data = df_long %>% filter(reject_buffer == 1), aes(x = xvalue, y = yvalue_corr, group = dye), color = "darkgrey") +
-  geom_line() +
+ geom_line(data = df_long_out2, aes(x = xvalue, y = yvalue_corr, group = dye), size = 0.2, alpha = 0.7, color = "lightgrey") +
+  geom_line(data = df_long_out2 %>% filter(reject_buffer == 1), aes(x = xvalue, y = yvalue_corr, group = dye), size = 0.2, alpha = 0.7,color = "darkgrey") +
+  geom_line(size = 0.3, alpha = 1) +
   # geom_point() +
   # geom_point(data = df %>% filter(detect_ever == 1), shape = 1, size = 2) +
-  scale_color_viridis_c()
+  scale_color_viridis_c() +
+  theme_void() 
+```
+
+
+```{r}
+df_long_out %>%
+  ungroup() %>%
+  filter(detect_ever == 1,
+         reject_buffer != 1) %>%
+  ggplot(aes(x = xvalue, y = yvalue_corr,  color = dye_order_num, group = dye)) + #
+  geom_line(data = df_long_out, aes(x = xvalue, y = yvalue_corr, group = dye), size = 0.2, alpha = 0.7, color = "lightgrey") +
+  geom_line(data = df_long_out %>% filter(reject_buffer == 1), aes(x = xvalue, y = yvalue_corr, group = dye), size = 0.2, alpha = 0.7,color = "darkgrey") +
+  geom_line(size = 0.3, alpha = 1) +
+  # geom_point() +
+  # geom_point(data = df %>% filter(detect_ever == 1), shape = 1, size = 2) +
+  scale_color_viridis_c() +
+  theme_void() -> p
+p
+
+ggsave("test_sankey.pdf", p, width = 12, height = 7)
 
 ```
 
