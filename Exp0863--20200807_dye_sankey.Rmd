@@ -13,329 +13,31 @@ Will explore at least:
 #library(networkD3)
 library(tidyverse)
 ```
-Read in the relevant data
-```{r}
-# hierarchically clustered dye library, with an order of where the dyes fall in this arrangement
-# classification at the following steps:
-# 1: initial index group (A, C, MWA, L, etc.)
-# 2: +/- detection of protein unfolding
-# 3: final library, temp sensitive, reactive, etc. 
-
-```
 
 ```{r}
-#### this is the sankeyNetwork src from https://github.com/christophergandrud/networkD3/blob/master/R/sankeyNetwork.R
-#' # Plot
-#' sankeyNetwork(Links = energy$links, Nodes = energy$nodes, Source = 'source',
-#'              Target = 'target', Value = 'value', NodeID = 'name',
-#'              units = 'TWh', fontSize = 12, nodeWidth = 30)
-#'
-#' # Colour links
-#' energy$links$energy_type <- sub(' .*', '',
-#'                                energy$nodes[energy$links$source + 1, 'name'])
-#'
-#' sankeyNetwork(Links = energy$links, Nodes = energy$nodes, Source = 'source',
-#'              Target = 'target', Value = 'value', NodeID = 'name',
-#'              LinkGroup = 'energy_type', NodeGroup = NULL)
-#'
-#' }
-#' @source
-#' D3.js was created by Michael Bostock. See \url{http://d3js.org/} and, more
-#' specifically for Sankey diagrams \url{http://bost.ocks.org/mike/sankey/}.
-#'
-#' @seealso \code{\link{JS}}
-#'
-#' @export
-
-sankeyNetwork <- function(Links, Nodes, Source, Target, Value,
-    NodeID, NodeGroup = NodeID, LinkGroup = NULL, units = "",
-    colourScale = JS("d3.scaleOrdinal(d3.schemeCategory20);"), fontSize = 7,
-    fontFamily = NULL, nodeWidth = 15, nodePadding = 10, margin = NULL,
-    height = NULL, width = NULL, iterations = 32, sinksRight = TRUE)
-{
-    # Check if data is zero indexed
-    check_zero(Links[, Source], Links[, Target])
-
-    # Hack for UI consistency. Think of improving.
-    colourScale <- as.character(colourScale)
-
-    # If tbl_df convert to plain data.frame
-    Links <- tbl_df_strip(Links)
-    Nodes <- tbl_df_strip(Nodes)
-
-    # Subset data frames for network graph
-    if (!is.data.frame(Links)) {
-        stop("Links must be a data frame class object.")
-    }
-    if (!is.data.frame(Nodes)) {
-        stop("Nodes must be a data frame class object.")
-    }
-    # if Source or Target are missing assume Source is the first
-    # column Target is the second column
-    if (missing(Source))
-        Source = 1
-    if (missing(Target))
-        Target = 2
-
-    if (missing(Value)) {
-        LinksDF <- data.frame(Links[, Source], Links[, Target])
-        names(LinksDF) <- c("source", "target")
-    } else if (!missing(Value)) {
-        LinksDF <- data.frame(Links[, Source], Links[, Target],
-            Links[, Value])
-        names(LinksDF) <- c("source", "target", "value")
-    }
-
-    # if NodeID is missing assume NodeID is the first column
-    if (missing(NodeID))
-        NodeID = 1
-    NodesDF <- data.frame(Nodes[, NodeID])
-    names(NodesDF) <- c("name")
-
-    # add node group if specified
-    if (is.character(NodeGroup)) {
-        NodesDF$group <- Nodes[, NodeGroup]
-    }
-
-    if (is.character(LinkGroup)) {
-        LinksDF$group <- Links[, LinkGroup]
-    }
-
-    margin <- margin_handler(margin)
-
-    # create options
-    options = list(NodeID = NodeID, NodeGroup = NodeGroup, LinkGroup = LinkGroup,
-        colourScale = colourScale, fontSize = fontSize, fontFamily = fontFamily,
-        nodeWidth = nodeWidth, nodePadding = nodePadding, units = units,
-        margin = margin, iterations = iterations, sinksRight = sinksRight)
-
-    # create widget
-    htmlwidgets::createWidget(name = "sankeyNetwork", x = list(links = LinksDF,
-        nodes = NodesDF, options = options), width = width, height = height,
-        htmlwidgets::sizingPolicy(padding = 10, browser.fill = TRUE),
-        package = "networkD3")
-}
-
-#' @rdname networkD3-shiny
-#' @export
-sankeyNetworkOutput <- function(outputId, width = "100%", height = "500px") {
-    shinyWidgetOutput(outputId, "sankeyNetwork", width, height,
-        package = "networkD3")
-}
-
-#' @rdname networkD3-shiny
-#' @export
-renderSankeyNetwork <- function(expr, env = parent.frame(), quoted = FALSE) {
-    if (!quoted)
-        {
-            expr <- substitute(expr)
-        }  # force quoted
-    shinyRenderWidget(expr, sankeyNetworkOutput, env, quoted = TRUE)
-}
-
-# Need some utils functions to make this all work 
-# https://github.com/christophergandrud/networkD3/blob/master/R/utils.R
-check_zero <- function(Source, Target) {
-    if (!is.factor(Source) && !is.factor(Target)) {
-        SourceTarget <- c(Source, Target)
-        if (is.numeric(SourceTarget) | is.integer(SourceTarget)) {
-            if (!(0 %in% SourceTarget))
-                warning(
-                    'It looks like Source/Target is not zero-indexed. This is required in JavaScript and so your plot may not render.',
-                    call. = FALSE)
-        }
-    }
-}
-
-
-tbl_df_strip <- function(x) {
-    if('tbl_df' %in% class(x)) {
-        message(paste(deparse(substitute(x)),
-                      'is a tbl_df. Converting to a plain data frame.'))
-        x <- base::as.data.frame(x)
-    }
-    return(x)
-}
-
-margin_handler <- function(margin){
-  # margin can be either a single value or a list with any of
-  #    top, right, bottom, left
-  # if margin is a single value, then we will stick
-  #    with the original behavior of networkD3 and use it for the right margin
-  if(!is.null(margin) && length(margin) == 1 && is.null(names(margin))){
-    margin <- list(
-      top = NULL,
-      right = margin,
-      bottom = NULL,
-      left = NULL
-    )
-  } else if(!is.null(margin)){
-    # if margin is a named vector then convert to list
-    if(!is.list(margin) && !is.null(names(margin))){
-      margin <- as.list(margin)
-    }
-    # if we are here then margin should be a list and
-    #   we will use the values supplied with NULL as default
-    margin <- modifyList(
-      list(top = NULL, right = NULL, bottom = NULL, left = NULL),
-      margin
-    )
-  } else {
-    # if margin is null, then make it a list of nulls for each position
-    margin <- list(top = NULL, right = NULL, bottom = NULL, left = NULL)
-  }
-}
-```
-
-```{r}
-URL <-"https://raw.githubusercontent.com/christophergandrud/networkD3/master/JSONdata/energy.json"
-
-Energy <- jsonlite::fromJSON(URL)
- 
-# Now we have 2 data frames: a 'links' data frame with 3 columns (from, to, value), and a 'nodes' data frame that gives the name of each node.
-
-# Thus we can plot it
-sankeyNetwork1(Links = Energy$links, 
-              Nodes = Energy$nodes, 
-              Source = "source",
-              Target = "target", 
-              Value = "value", 
-              NodeID = "name",
-              units = "TWh", 
-              fontSize = 12, 
-              nodeWidth = 30)
-```
-
-```{r}
-sankeyNetwork_dye <- function(Links, Nodes, Source, Target, Value,
-    NodeID, NodeGroup = NodeID, LinkGroup = NULL, units = "",
-    colourScale = JS("d3.scaleOrdinal(d3.schemeCategory20);"), fontSize = 7,
-    fontFamily = NULL, nodeWidth = 15, nodePadding = 10, margin = NULL,
-    height = NULL, width = NULL, iterations = 32, sinksRight = TRUE)
-{
-    # Check if data is zero indexed
-    check_zero(Links[, Source], Links[, Target])
-
-    # Hack for UI consistency. Think of improving.
-    colourScale <- as.character(colourScale)
-
-    # If tbl_df convert to plain data.frame
-    Links <- tbl_df_strip(Links)
-    Nodes <- tbl_df_strip(Nodes)
-
-    # Subset data frames for network graph
-    if (!is.data.frame(Links)) {
-        stop("Links must be a data frame class object.")
-    }
-    if (!is.data.frame(Nodes)) {
-        stop("Nodes must be a data frame class object.")
-    }
-    # if Source or Target are missing assume Source is the first
-    # column Target is the second column
-    if (missing(Source))
-        Source = 1
-    if (missing(Target))
-        Target = 2
-
-    if (missing(Value)) {
-        LinksDF <- data.frame(Links[, Source], Links[, Target])
-        names(LinksDF) <- c("source", "target")
-    } else if (!missing(Value)) {
-        LinksDF <- data.frame(Links[, Source], Links[, Target],
-            Links[, Value])
-        names(LinksDF) <- c("source", "target", "value")
-    }
-
-    # if NodeID is missing assume NodeID is the first column
-    if (missing(NodeID))
-        NodeID = 1
-    NodesDF <- data.frame(Nodes[, NodeID])
-    names(NodesDF) <- c("name")
-
-    # add node group if specified
-    if (is.character(NodeGroup)) {
-        NodesDF$group <- Nodes[, NodeGroup]
-    }
-
-    if (is.character(LinkGroup)) {
-        LinksDF$group <- Links[, LinkGroup]
-    }
-
-    margin <- margin_handler(margin)
-
-    # create options
-    options = list(NodeID = NodeID, NodeGroup = NodeGroup, LinkGroup = LinkGroup,
-        colourScale = colourScale, fontSize = fontSize, fontFamily = fontFamily,
-        nodeWidth = nodeWidth, nodePadding = nodePadding, units = units,
-        margin = margin, iterations = iterations, sinksRight = sinksRight) 
-    # glimpse(options)
-                   #    List of 12
-                   # $ NodeID     : chr "name"
-                   # $ NodeGroup  : chr "name"
-                   # $ LinkGroup  : NULL
-                   # $ colourScale: chr "d3.scaleOrdinal(d3.schemeCategory20);"
-                   # $ fontSize   : num 12
-                   # $ fontFamily : NULL
-                   # $ nodeWidth  : num 30
-                   # $ nodePadding: num 10
-                   # $ units      : chr "TWh"
-                   # $ margin     :List of 4
-                   #  ..$ top   : NULL
-                   #  ..$ right : NULL
-                   #  ..$ bottom: NULL
-                   #  ..$ left  : NULL
-                   # $ iterations : num 32
-                   # $ sinksRight : logi TRUE
-# 
-#     # create widget
-    htmlwidgets::createWidget(name = "sankeyNetwork", 
-                              x = list(links = LinksDF,
-                                        nodes = NodesDF, 
-                                        options = options), 
-                              width = width, 
-                              height = height,
-                              
-        htmlwidgets::sizingPolicy(padding = 10, browser.fill = TRUE),
-        package = "networkD3")
-}
-
-out <- sankeyNetwork_dye(Links = Energy$links, 
-              Nodes = Energy$nodes, 
-              Source = "source",
-              Target = "target", 
-              Value = "value", 
-              NodeID = "name",
-              units = "TWh", 
-              fontSize = 12, 
-              nodeWidth = 30)
-
-glimpse(out)
-```
-
-```{r}
-df_test <- read_csv("Exp0863--20200807_sankey_dye_data_v2.csv")
-df_test
-
-
+df_test <- read_csv("Exp0863--20200807_sankey_dye_data.csv")
 exit_values <- read_csv("Exp0863--20200807_exit_point_values.csv")
 
 hit_rate <- readRDS("Exp0810--20200527_dye_hit_rate_after_recall.rds")
-screen_outcome <- read_csv("Exp0810--20200416_all_screen_hits_v5.csv")
+screen_outcome <- read_csv("Exp0810--20200416_all_screen_hits_v5.csv") 
+
 
 node_order <- df_test %>% 
               select(start:full_lib,  exit_point, exit_reason) %>%
               names() %>%
               factor( . , levels = (.))
-node_order
 
 df <- hit_rate %>%
   left_join(screen_outcome %>% select(dye, detect_ever, reject_buffer)) %>%
   left_join(df_test %>% select(Class, dye, start:full_lib,  exit_point, exit_reason)) %>%
-  arrange(Class, dye_order_num) %>%
-  mutate(Class_order = c(1:nrow(.))) %>%
-  mutate_at(vars(start:full_lib), as.numeric)
+  arrange(Class, dye_order_num)  %>%
+#   mutate(Class_order = c(1:nrow(.))) %>%
+ mutate_at(vars(start:full_lib), as.numeric)
 
-df
+df_long_raw <- df %>%
+  pivot_longer(cols = start:full_lib, names_to = "check_point", values_to = "xvalue") %>%
+ # mutate(check_point = factor(check_point, levels = node_order)) %>%
+  filter(is.na(xvalue) == FALSE)
 ```
 ```{r}
 make_node <- function( df, filter_var, node_name, xvalue_in, distinct_var){
@@ -358,17 +60,80 @@ make_node_map <- function(df, var_list) {
                                            distinct_var = "dye")
                               }
 
+nodes <- read_csv("Exp0863--20200807_nodes.csv") %>%
+          pivot_longer(cols= c(xvalue_var, xvalue_var2), names_to = "node_end", values_to = "xvalue_in")
 
+nodes_info <- split(nodes, seq(nrow(nodes))) %>%
+                lapply(as.list) 
+
+nodes_dfs <- lapply(nodes_info, make_node_map, df = df_long_raw) %>%
+              bind_rows()
+
+
+set_corr <- function( val ) {
+  if (val == "start") {corr <- -100
+  } else if (val == "never_hit") {corr <- -200
+  } else if (val == "ever_hit") {corr <- 250
+  } else if (val == "t_sens") {corr <- 50
+  } else if (val == "hitters") {corr <- 250
+  } else if (val == "tech1") {corr <- 300
+  } else if (val == "tech2") {corr <- 150
+  } else {
+    corr <- 100
+  }
+}
 ```
-
-
 ```{r}
 
 
 
+
+
+nodes <- read_csv("Exp0863--20200807_nodes.csv") %>%
+          pivot_longer(cols= c(xvalue_var, xvalue_var2), names_to = "node_end", values_to = "xvalue_in")
+
+nodes_info <- split(nodes, seq(nrow(nodes))) %>%
+                lapply(as.list) 
+
+nodes_dfs <- lapply(nodes_info, make_node_map, df = df_long_raw) %>%
+              bind_rows()
+
+df_long <- nodes_dfs %>%
+  group_by(xvalue) %>%
+  arrange(dye_order_num) %>%
+  mutate(yvalue = row_number()) %>%
+  mutate(yvalue_center = median(yvalue))
+df_long%>% 
+  filter(xvalue == 8.5) %>%
+  arrange(yvalue)
+
+y_correction <- tibble("check_point" = df_long$check_point %>% unique) %>%
+                    mutate("corr" = lapply(check_point, set_corr) %>% as_vector() ) 
+
+df_long_out <- df_long %>%
+            left_join(y_correction, by = "check_point") %>%
+            mutate(yvalue_corr = yvalue + corr - yvalue_center) 
+
+
+df_long_out %>%
+  ungroup() %>%
+  filter(detect_ever == 1,
+         reject_buffer != 1) %>%
+  ggplot(aes(x = xvalue, y = yvalue_corr,  color = dye_order_num, group = dye)) + #
+ geom_line(data = df_long_out, aes(x = xvalue, y = yvalue_corr, group = dye), size = 0.2, alpha = 0.7, color = "lightgrey") +
+  geom_line(data = df_long_out %>% filter(reject_buffer == 1), aes(x = xvalue, y = yvalue_corr, group = dye), size = 0.2, alpha = 0.7,color = "darkgrey") +
+  geom_line(size = 0.3, alpha = 1) +
+  # geom_point() +
+  # geom_point(data = df %>% filter(detect_ever == 1), shape = 1, size = 2) +
+  scale_color_viridis_c() +
+  theme_void() -> p
+ggsave("test_sankey.pdf", p, width = 12, height = 7)
+```
+
+
+```{r}
 df_long_raw <- df %>%
   pivot_longer(cols = start:full_lib, names_to = "check_point", values_to = "xvalue") %>%
-
   mutate(check_point = factor(check_point, levels = node_order)) %>%
   filter(is.na(xvalue) == FALSE)
 
@@ -461,10 +226,11 @@ df_long_out <- df_long %>%
 ```
 
 ```{r}
-node1 <- list(filter_var = "detect_ever == 1",# "detect_ever == 01 & reject_buffer== 0", 
+node1 <- list(filter_var = "detect_ever == 1 & Class == 'Amyloid'",# "detect_ever == 01 & reject_buffer== 0", 
                   node_name = "ever_hit",
                   xvalue_in = 1.9) %>%
                make_node_map(df = df_long_raw %>% ungroup(),  var_list = .)
+node1
 
 df_long <- df_long_raw %>%
               #bind_rows(node1) %>%
