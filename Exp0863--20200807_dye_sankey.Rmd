@@ -40,16 +40,16 @@ make_node_map <- function(df, var_list) {
                                            xvalue_in = var_list$xvalue_in, 
                                            distinct_var = "dye")
                               }
-```
 
-```{r}
 nudge_node <- function(df, 
                        .corr_col, 
                        .filter_col,  
                        filt_var, 
                        rep_var,
                        overwrite = FALSE ) {
+  
   # https://community.rstudio.com/t/using-mutate-in-a-function-with-the-new-colname-as-an-argument/10399/2
+  #  https://dplyr.tidyverse.org/reference/recode.html
   filter_col <- enquo(.filter_col)
   corr_col <- enquo(.corr_col)
   new_corr_name <- quo_name(corr_col)
@@ -70,56 +70,6 @@ nudge_node <- function(df,
 
   df 
 }
-
-
-```
-
-
-```{r}
-
-# the initial df must contain all varaibles necessary to filter to create the nodes for the Sankey
-df <- readRDS("Exp0810--20200527_dye_hit_rate_after_recall.rds") %>% # dye name, tanimoto order, and and hit rate data
-      left_join(read_csv("Exp0810--20200416_all_screen_hits_v5.csv") %>% select(dye, detect_ever, reject_buffer)) %>% # manually curated triage calls
-      left_join(read_csv("Exp0863--20200807_sankey_dye_data.csv") %>% select(Class, dye)) %>% # just classes associated with the dye names (A, C, T ...)
-      arrange(Class, dye_order_num) 
-
-# read create nodes from the input data and a list of nodes 
-nodes <- read_csv("Exp0863--20200807_nodes.csv") %>%
-          pivot_longer(cols= c(xvalue_var, xvalue_var2), names_to = "node_end", values_to = "xvalue_in")%>%
-          split( . , seq(nrow( . ))) %>%
-          lapply(as.list) %>%
-  
-          lapply( . , make_node_map, df = df) %>% # make the node map for each input node info list
-          bind_rows() %>% # bind together into a single tibble
-  
-          group_by(xvalue) %>% # these groupings create the inter-node order AND quantitative heights
-          arrange(dye_order_num) %>%
-          mutate(yvalue = row_number(),
-                 y_correction = 0,
-                 x_correction = 0) %>%
-          mutate(yvalue_center = median(yvalue)) %>%
-          mutate(yvalue_final = yvalue + y_correction - yvalue_center) %>%
-          mutate(xvalue_final = xvalue + x_correction)
-  
-y_correction <- tibble("node_group" = df_long$node_group %>% unique) %>%
-                    mutate("corr" = lapply(node_group, set_corr) %>% as_vector() ) 
-
-set_corr <- function( val ) {
-  if (val == "start") {corr <- -100
-  } else if (val == "never_hit") {corr <- -200
-  } else if (val == "ever_hit") {corr <- 250
-  } else if (val == "t_sens") {corr <- 50
-  } else if (val == "hitters") {corr <- 250
-  } else if (val == "tech1") {corr <- 300
-  } else if (val == "tech2") {corr <- 150
-  } else {
-    corr <- 100
-  }
-}
-
-df_long_out <- df_long %>%
-            left_join(y_correction, by = "node_group") %>%
-            mutate(yvalue_corr = yvalue + corr - yvalue_center) 
 
 ggsankey <- function( nodes, 
                       x_variable = xvalue_final, 
@@ -151,16 +101,39 @@ ggsankey <- function( nodes,
     
     scale_color_viridis_c() 
 }
+```
 
-nodes %>%
- nudge_node( . , .filter_col = node_group, .corr_col = yvalue_final, filt_var = "start", rep_var = -500, overwrite  = FALSE) %>% 
-  #nudge_node( . , .filter_col = node_name, .corr_col = yvalue_final, filt_var = "add_T", rep_var = 400, overwrite  = FALSE) %>% 
-  nudge_node( . , .filter_col = node_group, .corr_col = yvalue_final, filt_var = "tech1", rep_var = 300, overwrite  = FALSE) %>% 
-  nudge_node( . , .filter_col = node_group, .corr_col = xvalue_final, filt_var = "tech1", rep_var = 20, overwrite  = FALSE) %>% 
+Read in the raw data
+```{r}
+# the initial df must contain all varaibles necessary to filter to create the nodes for the Sankey
+df <- readRDS("Exp0810--20200527_dye_hit_rate_after_recall.rds") %>% # dye name, tanimoto order, and and hit rate data
+      left_join(read_csv("Exp0810--20200416_all_screen_hits_v5.csv") %>% select(dye, detect_ever, reject_buffer)) %>% # manually curated triage calls
+      left_join(read_csv("Exp0863--20200807_sankey_dye_data.csv") %>% select(Class, dye)) %>% # just classes associated with the dye names (A, C, T ...)
+      arrange(Class, dye_order_num) 
 
-  ggsankey( . , xvalue_final, yvalue_final) + 
-  theme_void()
+# read create nodes from the input data and a list of nodes 
+nodes <- read_csv("Exp0863--20200807_nodes.csv") %>%
+          pivot_longer(cols= c(xvalue_var, xvalue_var2), names_to = "node_end", values_to = "xvalue_in")%>%
+          split( . , seq(nrow( . ))) %>%
+          lapply(as.list) %>%
+  
+          lapply( . , make_node_map, df = df) %>% # make the node map for each input node info list
+          bind_rows() %>% # bind together into a single tibble
+  
+          group_by(xvalue) %>% # these groupings create the inter-node order AND quantitative heights
+          arrange(dye_order_num) %>%
+          mutate(yvalue = row_number(),
+                 y_correction = 0,
+                 x_correction = 0) %>%
+          mutate(yvalue_center = median(yvalue)) %>%
+          mutate(yvalue_final = yvalue + y_correction - yvalue_center) %>%
+          mutate(xvalue_final = xvalue + x_correction)
+```
 
+
+Visualize and nudge nodes
+```{r}
+ # create a tibble of nudges to lapply call 
 # nudges <- tribble(
 # 
 # )
