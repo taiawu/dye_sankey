@@ -1,0 +1,278 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+library(rlang)
+library(lobstr)
+```
+```{r}
+strrep("l", 7)
+```
+
+
+```{r}
+lobstr::ast(1 + 2 * 3)
+
+lobstr::ast(f1(f2(a, b), f3(1, f4(2))))
+```
+
+
+```{r}
+# expr returns exactly what you put in
+# you can pass it anything
+
+expr(mean(x, na.rm = TRUE))
+#> mean(x, na.rm = TRUE)
+
+expr(10 + 100 + 1000)
+#> 10 + 100 + 1000
+```
+
+
+
+```{r}
+xx <- expr(x + x)
+yy <- expr(y + y)
+
+expr(!!xx / !!yy)
+#> (x + x)/(y + y)
+
+expr(!!expr((x+x)) / !!expr(y+y)) # equivalent
+
+```
+
+
+```{r}
+
+df <- data.frame(x = 1:5, y = sample(5))
+df
+
+eval_tidy(expr(x + y), df)
+#> [1] 6 5 7 5 7
+```
+
+```{r}
+#> █─f 
+#> └─█─g 
+#>   └─█─h
+
+f(g( h() ) ) 
+
+#> █─`+` 
+#> ├─█─`+` 
+#> │ ├─1 
+#> │ └─2 
+#> └─3
+
+(1+2) + 3
+
+#> █─`*` 
+#> ├─█─`(` 
+#> │ └─█─`+` 
+#> │   ├─x 
+#> │   └─y 
+#> └─z
+
+z * (x+y)
+```
+
+```{r}
+df <- mtcars
+
+sym("cyl")
+
+mtcars %>% select(sym("cyl"))
+```
+
+```{r}
+x <- expr(read.table("important.csv", row.names = FALSE))
+
+x[[1]]
+x[1]
+
+x[[2]]
+x[2]
+
+x[[3]]
+x[3]
+
+x[-2]
+
+```
+```{r}
+time <- "morning"
+name <- "Hadley"
+
+cement <- function(...) {
+  args <- ensyms(...)
+  paste(purrr::map(args, as_string), collapse = " ")
+}
+
+
+paste("Good", time, name)
+cement(Good, !!time, !!name)
+```
+
+```{r}
+library(MASS)
+MASS # quoted
+
+
+mtcars2 <- subset(mtcars, cyl == 4)
+# mtcars # evalulated
+# cyl # quoted
+# 4 # evaluated
+
+with(mtcars2, sum(vs))
+
+sum(mtcars2$am)
+
+
+rm(mtcars2)
+```
+
+```{r}
+subset2 <- function(data, rows) {
+  rows <- enquo(rows)
+  rows_val <- eval_tidy(rows, data)
+  stopifnot(is.logical(rows_val))
+
+  data[rows_val, , drop = FALSE]
+}
+
+threshold_var <- function(df, var, val) {
+  var <- as_string(ensym(var))
+  subset2(df, .data[[var]] >= !!val)
+}
+
+df <- data.frame(x = 1:10)
+
+
+threshold_expr <- function(df, expr, val) {
+  expr <- enquo(expr)
+  subset2(df, !!expr == !!val)
+}
+
+threshold_expr(df, x, 8)
+
+nodes
+
+nudge_node <- function(df, 
+                       .corr_col, 
+                       .filter_col,  
+                       filt_var, 
+                       rep_var,
+                       overwrite = FALSE ) {
+  # https://community.rstudio.com/t/using-mutate-in-a-function-with-the-new-colname-as-an-argument/10399/2
+  filter_col <- enquo(.filter_col)
+  corr_col <- enquo(.corr_col)
+  new_corr_name <- quo_name(corr_col)
+  
+  # GGG_levels <- c(0, 1, 2, 3, 4, 5)
+  df <- df %>% 
+          mutate(temp = !!corr_col) %>% ## THIS SUCKS part 1
+          mutate(!!new_corr_name := replace( !!corr_col, !!filter_col == !!filt_var, rep_var)) %>%
+          mutate(!!new_corr_name := !!corr_col + temp) %>% ## THIS SUCKS part 2
+          select(-temp) ## THIS SUCKS part 3
+  
+  if (overwrite == TRUE) {
+    print("overwriting")
+      df <- df %>% 
+          mutate(!!new_corr_name := replace( !!corr_col, !!filter_col == !!filt_var, rep_var))
+    
+  }
+
+  df 
+}
+nodes
+
+a <- nudge_node(nodes %>% ungroup(), .filter_col = node_group, .corr_col = y_correction, filt_var = "start", rep_var = -200)
+a %>% select(y_correction)
+
+new_corr_name <- quo_name("y_correction")
+ 
+a %>% select(y_correction)
+
+b <- nudge_node(a %>% ungroup(), .filter_col = node_group, .corr_col = y_correction, filt_var = "start", rep_var = -100)
+b %>% select(y_correction)
+
+c <- nudge_node(a %>% ungroup(), .filter_col = node_group, .corr_col = y_correction, filt_var = "start", rep_var = 1, overwrite = TRUE)
+c %>% select(y_correction)
+
+
+rep_ycorr(nodes, node_group, "start")
+
+nodes %>%
+  mutate(y_correction = replace(y_correction, threshold_expr(nodes, node_group, "start"), "foo"))
+
+```
+
+
+
+
+
+
+```{r}
+set_corr <- function( val ) {
+  if (val == "start") {corr <- -100
+  } else if (val == "never_hit") {corr <- -200
+  } else if (val == "ever_hit") {corr <- 250
+  } else if (val == "t_sens") {corr <- 50
+  } else if (val == "hitters") {corr <- 250
+  } else if (val == "tech1") {corr <- 300
+  } else if (val == "tech2") {corr <- 150
+  } else {
+    corr <- 100
+  }
+}
+a <- set_corr("start")
+a
+
+lobstr::ast(if)
+
+lobstr::ast(set_corr("start"))
+lobstr::ast(set_corr("tech2"))
+
+
+lobstr::ast( g( h(1,2,3,4,"kjdkljdflkbjafd"), i( j()) ) )
+
+
+lobstr::ast( (y = 2) {x <- 1} )) 
+```
+
+
+
+```{r}
+# ??????
+"a" <- 1
+a
+
+a <- 2
+a
+
+`a` <- 3
+a
+```
+
+
+
+
+
+
+
+
+
+
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+

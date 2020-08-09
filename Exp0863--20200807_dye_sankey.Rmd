@@ -43,6 +43,39 @@ make_node_map <- function(df, var_list) {
 ```
 
 ```{r}
+nudge_node <- function(df, 
+                       .corr_col, 
+                       .filter_col,  
+                       filt_var, 
+                       rep_var,
+                       overwrite = FALSE ) {
+  # https://community.rstudio.com/t/using-mutate-in-a-function-with-the-new-colname-as-an-argument/10399/2
+  filter_col <- enquo(.filter_col)
+  corr_col <- enquo(.corr_col)
+  new_corr_name <- quo_name(corr_col)
+  
+  # GGG_levels <- c(0, 1, 2, 3, 4, 5)
+  df <- df %>% 
+          mutate(temp = !!corr_col) %>% ## THIS SUCKS part 1
+          mutate(!!new_corr_name := replace( !!corr_col, !!filter_col == !!filt_var, rep_var)) %>%
+          mutate(!!new_corr_name := !!corr_col + temp) %>% ## THIS SUCKS part 2
+          select(-temp) ## THIS SUCKS part 3
+  
+  if (overwrite == TRUE) {
+    print("overwriting")
+      df <- df %>% 
+          mutate(!!new_corr_name := replace( !!corr_col, !!filter_col == !!filt_var, rep_var))
+    
+  }
+
+  df 
+}
+
+
+```
+
+
+```{r}
 
 # the initial df must contain all varaibles necessary to filter to create the nodes for the Sankey
 df <- readRDS("Exp0810--20200527_dye_hit_rate_after_recall.rds") %>% # dye name, tanimoto order, and and hit rate data
@@ -104,13 +137,13 @@ ggsankey <- function( nodes,
   
   nodes %>%
       ungroup() %>%
-      filter(!!color_filter) %>%
+     filter(!!color_filter) %>%
     
       ggplot(     ) + 
-      geom_line(data = nodes, 
+      geom_line(data = nodes,
                  aes(x = !!x_var, y = !!y_var, group = !!group_var), size = 0.2, alpha = 0.7, color = "lightgrey") +
-      
-    geom_line(data = nodes %>% filter(reject_buffer == 1), 
+
+    geom_line(data = nodes %>% filter(reject_buffer == 1),
                 aes(x = !!x_var, y = !!y_var, group = !!group_var), size = 0.2, alpha = 0.7, color = "darkgrey") +
       
     geom_line( aes(x = !!x_var, y = !!y_var,  color = !!color_var , group = !!group_var), 
@@ -119,36 +152,28 @@ ggsankey <- function( nodes,
     scale_color_viridis_c() 
 }
 
-ggsankey(nodes, xvalue_final, yvalue_final) + theme_void()
+nodes %>%
+ nudge_node( . , .filter_col = node_group, .corr_col = yvalue_final, filt_var = "start", rep_var = -500, overwrite  = FALSE) %>% 
+  #nudge_node( . , .filter_col = node_name, .corr_col = yvalue_final, filt_var = "add_T", rep_var = 400, overwrite  = FALSE) %>% 
+  nudge_node( . , .filter_col = node_group, .corr_col = yvalue_final, filt_var = "tech1", rep_var = 300, overwrite  = FALSE) %>% 
+  nudge_node( . , .filter_col = node_group, .corr_col = xvalue_final, filt_var = "tech1", rep_var = 20, overwrite  = FALSE) %>% 
 
+  ggsankey( . , xvalue_final, yvalue_final) + 
+  theme_void()
 
-ggsankey(df_long_out) + theme_void()
-```
+# nudges <- tribble(
+# 
+# )
 
+nodes %>%
+ nudge_node( . , .filter_col = node_group, .corr_col = yvalue_final, filt_var = "start", rep_var = -500, overwrite  = FALSE) %>% 
+  #nudge_node( . , .filter_col = node_name, .corr_col = yvalue_final, filt_var = "add_T", rep_var = 400, overwrite  = FALSE) %>% 
+  nudge_node( . , .filter_col = node_group, .corr_col = yvalue_final, filt_var = "tech1", rep_var = 300, overwrite  = FALSE) %>% 
+  nudge_node( . , .filter_col = node_group, .corr_col = xvalue_final, filt_var = "tech1", rep_var = 40, overwrite  = FALSE) %>% 
 
+  ggsankey( . , xvalue_final, yvalue_final) + 
+  theme_void()
 
-```{r}
-
-
-df_long
-
-df_long_out %>%
-  ungroup() %>%
-  filter(detect_ever == 1,
-         reject_buffer != 1) %>%
-  ggplot(aes(x = xvalue, y = yvalue_corr,  color = dye_order_num, group = dye)) + #
- geom_line(data = df_long_out, aes(x = xvalue, y = yvalue_corr, group = dye), size = 0.2, alpha = 0.7, color = "lightgrey") +
-  geom_line(data = df_long_out %>% filter(reject_buffer == 1), aes(x = xvalue, y = yvalue_corr, group = dye), size = 0.2, alpha = 0.7,color = "darkgrey") +
-  geom_line(size = 0.3, alpha = 1) +
-  scale_color_viridis_c() +
-  theme_void() -> p
-p
-
-df_long_out %>% head()
-```
-
-```{r}
-nudge_node <- function(node_)
 ```
 
 
