@@ -63,15 +63,41 @@ ggsankey <- function( nodes,
     
       ggplot(     ) + 
       geom_line(data = nodes,
-                 aes(x = !!x_var, y = !!y_var, group = !!group_var), size = 0.2, alpha = 0.7, color = "lightgrey") +
+                 aes(x = !!x_var, y = !!y_var, group = !!group_var), size = 0.2, alpha = 0.7, color = "#d9d9d9") +
 
     geom_line(data = nodes %>% filter(reject_buffer == 1),
-                aes(x = !!x_var, y = !!y_var, group = !!group_var), size = 0.2, alpha = 0.7, color = "darkgrey") +
+                aes(x = !!x_var, y = !!y_var, group = !!group_var), size = 0.2, alpha = 0.7, color = "#525252") +
       
     geom_line( aes(x = !!x_var, y = !!y_var,  color = !!color_var , group = !!group_var), 
                  size = 0.3, alpha = 1) +
     
     scale_color_viridis_c() 
+}
+
+nudge_node <- function(df, 
+                       .corr_col, 
+                       .filter_col,  
+                       filt_var, 
+                       rep_var,
+                       overwrite = FALSE ) {
+  
+  #  https://adv-r.hadley.nz/evaluation.html#tidy-evaluation
+  #  https://community.rstudio.com/t/using-mutate-in-a-function-with-the-new-colname-as-an-argument/10399/2
+  #  https://dplyr.tidyverse.org/reference/recode.html
+  
+  new_corr_name <- enquo(.corr_col) %>%
+                    quo_name()
+
+  df <- df %>% 
+          mutate(!!new_corr_name := replace( {{.corr_col}}, {{.filter_col}} == !!filt_var, {{.corr_col}}[{{.filter_col}} == !!filt_var] + rep_var))
+  
+  if (overwrite == TRUE) {
+    print("overwriting")
+      df <- df %>% 
+           mutate(!!new_corr_name := replace( {{.corr_col}}, {{.filter_col}} == !!filt_var, rep_var))
+      }
+
+  df 
 }
 ```
 
@@ -99,170 +125,241 @@ nodes <- read_csv("Exp0863--20200807_nodes.csv") %>%
                  x_correction = 0) %>%
           mutate(yvalue_center = median(yvalue)) %>%
           mutate(yvalue_final = yvalue + y_correction - yvalue_center) %>%
-          mutate(xvalue_final = xvalue + x_correction)
+          mutate(xvalue_final = xvalue + x_correction) %>%
+         ungroup() %>%
+        arrange(node_name) %>%
+        mutate(node_side = rep(c("node_start", "node_end"), times = nrow(.)/2)) %>%
+        unite("node_group_side", c("node_group", "node_side"), sep = "_", remove = FALSE ) %>%
+        unite("node_name_side", c("node_name", "node_side"), sep = "_", remove = FALSE ) %>%
+        group_by(node_name_side, xvalue) %>%
+        arrange(xvalue) %>%
+        nest() %>%
+        ungroup() %>%
+        mutate(node_number = row_number()) %>%
+        unnest(data) %>%
+        mutate(sankey_right_half = node_number > 27)
+
+```
+
+```{r}
+nudged_nodes <- nodes %>% 
+          nudge_node( . , .filter_col = node_group_side, .corr_col = xvalue_final, filt_var = "start_node_end", rep_var = 0.5, overwrite  = FALSE)  %>%
+          nudge_node( . , .filter_col = node_group_side, .corr_col = xvalue_final, filt_var = "t_sens_node_end", rep_var = 0.5, overwrite  = FALSE)  %>%
+          nudge_node( . , .filter_col = node_group_side, .corr_col = xvalue_final, filt_var = "never_hit_node_end", rep_var = 0.8, overwrite  = FALSE)  %>%
+          nudge_node( . , .filter_col = node_group_side, .corr_col = xvalue_final, filt_var = "library_node_end", rep_var = +1, overwrite  = FALSE)  %>%
+          nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_1_node_start", rep_var = 0, overwrite  = FALSE)  %>%
+          nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_1_node_end", rep_var = -0.5, overwrite  = FALSE)  %>%
+          
+          nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_2_node_start", rep_var = -3, overwrite  = FALSE)  %>%
+          nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_2_node_end", rep_var = -2.7, overwrite  = FALSE)  %>%
+            
+          nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_3_node_start", rep_var = -3, overwrite  = FALSE)  %>%
+          nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_3_node_end", rep_var = -2, overwrite  = FALSE)  %>%
+            
+          nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_4_node_start", rep_var = -1, overwrite  = FALSE)  %>%
+          nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_4_node_end", rep_var = -1, overwrite  = FALSE)  %>%
+            
+          nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_5_node_start", rep_var = -1, overwrite  = FALSE)  %>%
+          nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_5_node_end", rep_var = -1, overwrite  = FALSE)  %>%
+            
+          nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_6_node_start", rep_var = -0.5, overwrite  = FALSE)  %>%
+          nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_6_node_end", rep_var = -0.6, overwrite  = FALSE)  %>%
+            
+          nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_7_node_start", rep_var = -2.2, overwrite  = FALSE)  %>%
+          nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_7_node_end", rep_var = 3, overwrite  = FALSE)  %>%
+            
+          nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "ever_hit_node_start", rep_var = 3, overwrite  = FALSE)  %>%
+          nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "ever_hit_node_end", rep_var = 4, overwrite  = FALSE)  %>%
+            
+          nudge_node( . , .filter_col = node_group, .corr_col = yvalue_final, filt_var = "start", rep_var = -80, overwrite  = FALSE)  %>% 
+          nudge_node( . , .filter_col = node_group, .corr_col = xvalue_final, filt_var = "start", rep_var = -4, overwrite  = FALSE)  %>% 
+            
+          nudge_node( . , .filter_col = node_name, .corr_col = yvalue_final, filt_var = "add_T", rep_var = 220, overwrite  = FALSE)  %>%
+          nudge_node( . , .filter_col = node_name, .corr_col = xvalue_final, filt_var = "add_T", rep_var = 2, overwrite  = FALSE)  %>%
+            
+          nudge_node( . , .filter_col = node_name, .corr_col = yvalue_final, filt_var = "add_C", rep_var = 245, overwrite  = FALSE)  %>%
+          nudge_node( . , .filter_col = node_name, .corr_col = xvalue_final, filt_var = "add_C", rep_var = -0.5, overwrite  = FALSE)  %>%
+          
+          nudge_node( . , .filter_col = node_name, .corr_col = yvalue_final, filt_var = "add_A", rep_var = 315, overwrite  = FALSE)  %>%
+          nudge_node( . , .filter_col = node_name, .corr_col = xvalue_final, filt_var = "add_A", rep_var = -0.7, overwrite  = FALSE)  %>%
+          
+          nudge_node( . , .filter_col = node_name, .corr_col = yvalue_final, filt_var = "add_L", rep_var = 335, overwrite  = FALSE)  %>%
+          nudge_node( . , .filter_col = node_name, .corr_col = xvalue_final, filt_var = "add_L", rep_var = -2.5, overwrite  = FALSE)  %>%
+            
+          
+          nudge_node( . , .filter_col = node_name, .corr_col = yvalue_final, filt_var = "add_MWA", rep_var = +75, overwrite  = FALSE)  %>%
+          nudge_node( . , .filter_col = node_name, .corr_col = xvalue_final, filt_var = "add_MWA", rep_var = -0.5, overwrite  = FALSE)  %>%
+            
+          nudge_node( . , .filter_col = node_name, .corr_col = yvalue_final, filt_var = "add_SYPROlog", rep_var = 5, overwrite  = FALSE)  %>%
+          nudge_node( . , .filter_col = node_name, .corr_col = xvalue_final, filt_var = "add_SYPROlog", rep_var = 0.5, overwrite  = FALSE)  %>%
+            
+          nudge_node( . , .filter_col = node_name, .corr_col = yvalue_final, filt_var = "add_MWC", rep_var = -30, overwrite  = FALSE)  %>%
+          nudge_node( . , .filter_col = node_name, .corr_col = xvalue_final, filt_var = "add_MWC", rep_var = -3.5, overwrite  = FALSE)  %>%
+             
+          nudge_node( . , .filter_col = node_group, .corr_col = yvalue_final, filt_var = "library", rep_var = 100, overwrite  = FALSE)  %>% 
+            
+          nudge_node( . , .filter_col = node_group, .corr_col = yvalue_final, filt_var = "ever_hit", rep_var = 100, overwrite  = FALSE) %>%
+          nudge_node( . , .filter_col = node_group, .corr_col = xvalue_final, filt_var = "ever_hit", rep_var = 0, overwrite  = FALSE) %>%
+          nudge_node( . , .filter_col = node_group_side, .corr_col = xvalue_final, filt_var = "ever_hit_node_end", rep_var = 0.5, overwrite  = FALSE) %>%
+            
+          nudge_node( . , .filter_col = node_group, .corr_col = yvalue_final, filt_var = "never_hit", rep_var = - 100, overwrite  = FALSE) %>%
+          nudge_node( . , .filter_col = node_group, .corr_col = xvalue_final, filt_var = "never_hit", rep_var = 6, overwrite  = FALSE) %>%
+            
+          nudge_node( . , .filter_col = node_group, .corr_col = yvalue_final, filt_var = "t_sens", rep_var = -10, overwrite  = FALSE) %>%
+          nudge_node( . , .filter_col = node_group, .corr_col = xvalue_final, filt_var = "t_sens", rep_var = 6.5, overwrite  = FALSE) %>%
+            
+          
+          nudge_node( . , .filter_col = node_group, .corr_col = yvalue_final, filt_var = "tech1", rep_var = 330, overwrite  = FALSE) %>%
+          nudge_node( . , .filter_col = node_group, .corr_col = xvalue_final, filt_var = "tech1", rep_var = 8, overwrite  = FALSE) %>%
+            
+          nudge_node( . , .filter_col = node_group, .corr_col = yvalue_final, filt_var = "tech2", rep_var = 190, overwrite  = FALSE) %>%
+          nudge_node( . , .filter_col = node_group, .corr_col = xvalue_final, filt_var = "tech2", rep_var = 8, overwrite  = FALSE) %>%
+            
+          nudge_node( . , .filter_col = node_group, .corr_col = yvalue_final, filt_var = "tech3", rep_var = 150, overwrite  = FALSE) %>%
+          nudge_node( . , .filter_col = node_group, .corr_col = xvalue_final, filt_var = "tech3", rep_var = 4.2, overwrite  = FALSE) %>%
+            
+          nudge_node( . , .filter_col = node_group_side, .corr_col = xvalue_final, filt_var = "tech3_node_end", rep_var = 1.5, overwrite  = FALSE) %>%
+          #nudge_node( . , .filter_col = node_group_side, .corr_col = xvalue_final, filt_var = "tech3", rep_var = 4.5, overwrite  = FALSE) %>%
+            
+            
+          nudge_node( . , .filter_col = sankey_right_half, .corr_col = xvalue_final, filt_var = TRUE, rep_var = 2.5, overwrite  = FALSE) %>%
+          nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_7_node_end", rep_var = -1, overwrite  = FALSE) 
+
+# write_rds(nudged_nodes, "Exp0863--20200808_nudged_nodes.rds")
 ```
 
 
 Visualize and nudge nodes
 ```{r}
-# create a tibble of nudges to lapply call 
-# nudges <- tribble(
-# 
-# )
+ nudged_nodes  %>% 
 
-nudge_node <- function(df, 
-                       .corr_col, 
-                       .filter_col,  
-                       filt_var, 
-                       rep_var,
-                       overwrite = FALSE ) {
-  
-  #  https://adv-r.hadley.nz/evaluation.html#tidy-evaluation
-  #  https://community.rstudio.com/t/using-mutate-in-a-function-with-the-new-colname-as-an-argument/10399/2
-  #  https://dplyr.tidyverse.org/reference/recode.html
-  
-  new_corr_name <- enquo(.corr_col) %>%
-                    quo_name()
-
-  df <- df %>% 
-          mutate(!!new_corr_name := replace( {{.corr_col}}, {{.filter_col}} == !!filt_var, {{.corr_col}}[{{.filter_col}} == !!filt_var] + rep_var))
-  
-  if (overwrite == TRUE) {
-    print("overwriting")
-      df <- df %>% 
-           mutate(!!new_corr_name := replace( {{.corr_col}}, {{.filter_col}} == !!filt_var, rep_var))
-      }
-
-  df 
-}
-
-# tribble(
-#   ~.filter_col,      ~.corr_col,    ~filt_var,   ~rep_var,  ~overwrite,
-#      node_group,  y_correction,      "start",     500,       FALSE
-# )
-nodes  %>% ungroup() %>% select(node_name) %>% table()
-nodes%>% ungroup()  %>% select(node_group) %>% table()
-
-nodes %>% 
-  ungroup() %>%
-  arrange(node_name) %>%
-  mutate(node_side = rep(c("node_start", "node_end"), times = nrow(.)/2)) %>%
-  filter(node_side == "node_end" & node_group == "library")
-  mutate(xvalue = replace(xvalue, xvalue > 8, xvalue[xvalue > 8] + 5))
-
-nodes %>% 
-  ungroup() %>%
-  arrange(dye, node_name, xvalue)
-
-nodes %>% 
-  ungroup() %>%
-  arrange(node_name) %>%
-  mutate(node_side = rep(c("node_start", "node_end"), times = nrow(.)/2)) %>%
-  unite("node_group_side", c("node_group", "node_side"), sep = "_", remove = FALSE ) %>%
-  unite("node_name_side", c("node_name", "node_side"), sep = "_", remove = FALSE ) %>%
-  filter(! node_group %in% c("start", "library"))
-```
-
-
-```{r}
-
-nodes %>% 
-  ungroup() %>%
-  arrange(node_name) %>%
-  mutate(node_side = rep(c("node_start", "node_end"), times = nrow(.)/2)) %>%
-  unite("node_group_side", c("node_group", "node_side"), sep = "_", remove = FALSE ) %>%
-  unite("node_name_side", c("node_name", "node_side"), sep = "_", remove = FALSE ) %>%
-   # mutate(xvalue_final = replace(xvalue_final, 
-   #                               node_side == "node_end" & node_group == "library", 
-   #                               xvalue_final[node_side == "node_end" & node_group == "library"] + 1)) %>%
-   # 
-   #   mutate(xvalue_final = replace(xvalue_final, 
-   #                               node_side == "node_start" & node_group == "start", 
-   #                               xvalue_final[node_side =="node_start" & node_group == "start"]  - 0.3)) %>%
-  # arrange(xvalue) %>%
- 
-  
- # nudge_node( . , .filter_col = node_group, .corr_col = yvalue_final, filt_var = "add_T", rep_var = 400, overwrite  = FALSE) %>%
-nudge_node( . , .filter_col = node_group_side, .corr_col = xvalue_final, filt_var = "start_node_end", rep_var = 0.5, overwrite  = FALSE)  %>%
-nudge_node( . , .filter_col = node_group_side, .corr_col = xvalue_final, filt_var = "t_sens_node_end", rep_var = 0.5, overwrite  = FALSE)  %>%
-nudge_node( . , .filter_col = node_group_side, .corr_col = xvalue_final, filt_var = "never_hit_node_end", rep_var = 0.8, overwrite  = FALSE)  %>%
-nudge_node( . , .filter_col = node_group_side, .corr_col = xvalue_final, filt_var = "library_node_end", rep_var = +1, overwrite  = FALSE)  %>%
-nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_1_node_start", rep_var = 0, overwrite  = FALSE)  %>%
-nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_1_node_end", rep_var = -0.5, overwrite  = FALSE)  %>%
-
-nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_2_node_start", rep_var = -3, overwrite  = FALSE)  %>%
-nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_2_node_end", rep_var = -2.7, overwrite  = FALSE)  %>%
-  
-nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_3_node_start", rep_var = -3, overwrite  = FALSE)  %>%
-nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_3_node_end", rep_var = -2, overwrite  = FALSE)  %>%
-  
-nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_4_node_start", rep_var = -1, overwrite  = FALSE)  %>%
-nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_4_node_end", rep_var = -1, overwrite  = FALSE)  %>%
-  
-nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_5_node_start", rep_var = -1, overwrite  = FALSE)  %>%
-nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_5_node_end", rep_var = -1, overwrite  = FALSE)  %>%
-  
-nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_6_node_start", rep_var = -0.5, overwrite  = FALSE)  %>%
-nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_6_node_end", rep_var = -0.6, overwrite  = FALSE)  %>%
-  
-nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_7_node_start", rep_var = -2.2, overwrite  = FALSE)  %>%
-nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "library_7_node_end", rep_var = 3, overwrite  = FALSE)  %>%
-  
-nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "ever_hit_node_start", rep_var = 3, overwrite  = FALSE)  %>%
-nudge_node( . , .filter_col = node_name_side, .corr_col = xvalue_final, filt_var = "ever_hit_node_end", rep_var = 4, overwrite  = FALSE)  %>%
-  
-nudge_node( . , .filter_col = node_group, .corr_col = yvalue_final, filt_var = "start", rep_var = -80, overwrite  = FALSE)  %>% 
-nudge_node( . , .filter_col = node_group, .corr_col = xvalue_final, filt_var = "start", rep_var = -4, overwrite  = FALSE)  %>% 
-  
-nudge_node( . , .filter_col = node_name, .corr_col = yvalue_final, filt_var = "add_T", rep_var = 360, overwrite  = FALSE)  %>%
-nudge_node( . , .filter_col = node_name, .corr_col = xvalue_final, filt_var = "add_T", rep_var = 1.5, overwrite  = FALSE)  %>%
-  
-nudge_node( . , .filter_col = node_name, .corr_col = yvalue_final, filt_var = "add_C", rep_var = 320, overwrite  = FALSE)  %>%
-nudge_node( . , .filter_col = node_name, .corr_col = xvalue_final, filt_var = "add_C", rep_var = -0.5, overwrite  = FALSE)  %>%
-  
-nudge_node( . , .filter_col = node_name, .corr_col = yvalue_final, filt_var = "add_A", rep_var = 330, overwrite  = FALSE)  %>%
-nudge_node( . , .filter_col = node_name, .corr_col = xvalue_final, filt_var = "add_A", rep_var = -0.7, overwrite  = FALSE)  %>%
-
-nudge_node( . , .filter_col = node_name, .corr_col = yvalue_final, filt_var = "add_L", rep_var = 380, overwrite  = FALSE)  %>%
-nudge_node( . , .filter_col = node_name, .corr_col = xvalue_final, filt_var = "add_L", rep_var = -2.5, overwrite  = FALSE)  %>%
-  
-
-nudge_node( . , .filter_col = node_name, .corr_col = yvalue_final, filt_var = "add_MWA", rep_var = +5, overwrite  = FALSE)  %>%
-nudge_node( . , .filter_col = node_name, .corr_col = xvalue_final, filt_var = "add_MWA", rep_var = -1.5, overwrite  = FALSE)  %>%
-  
-nudge_node( . , .filter_col = node_name, .corr_col = yvalue_final, filt_var = "add_SYPROlog", rep_var = -30, overwrite  = FALSE)  %>%
-nudge_node( . , .filter_col = node_name, .corr_col = xvalue_final, filt_var = "add_SYPROlog", rep_var = 0.5, overwrite  = FALSE)  %>%
-  
-nudge_node( . , .filter_col = node_name, .corr_col = yvalue_final, filt_var = "add_MWC", rep_var = -60, overwrite  = FALSE)  %>%
-nudge_node( . , .filter_col = node_name, .corr_col = xvalue_final, filt_var = "add_MWC", rep_var = -3, overwrite  = FALSE)  %>%
-   
-nudge_node( . , .filter_col = node_group, .corr_col = yvalue_final, filt_var = "library", rep_var = 100, overwrite  = FALSE)  %>% 
-  
-nudge_node( . , .filter_col = node_group, .corr_col = yvalue_final, filt_var = "ever_hit", rep_var = 130, overwrite  = FALSE) %>%
-  
-nudge_node( . , .filter_col = node_group, .corr_col = yvalue_final, filt_var = "never_hit", rep_var = -120, overwrite  = FALSE) %>%
-nudge_node( . , .filter_col = node_group, .corr_col = xvalue_final, filt_var = "never_hit", rep_var = 7, overwrite  = FALSE) %>%
-  
-nudge_node( . , .filter_col = node_group, .corr_col = yvalue_final, filt_var = "t_sens", rep_var = -20, overwrite  = FALSE) %>%
-nudge_node( . , .filter_col = node_group, .corr_col = xvalue_final, filt_var = "t_sens", rep_var = 7.5, overwrite  = FALSE) %>%
-  
-
-nudge_node( . , .filter_col = node_group, .corr_col = yvalue_final, filt_var = "tech1", rep_var = 270, overwrite  = FALSE) %>%
-nudge_node( . , .filter_col = node_group, .corr_col = xvalue_final, filt_var = "tech1", rep_var = 6, overwrite  = FALSE) %>%
-  
-nudge_node( . , .filter_col = node_group, .corr_col = yvalue_final, filt_var = "tech2", rep_var = 180, overwrite  = FALSE) %>%
-nudge_node( . , .filter_col = node_group, .corr_col = xvalue_final, filt_var = "tech2", rep_var = 6, overwrite  = FALSE) %>%
-  
- # nudge_node( . , .filter_col = node_group, .corr_col = xvalue_final, filt_var = "tech1", rep_var = , overwrite  = FALSE) %>%
   ggsankey( . , xvalue_final, yvalue_final) +
-  theme_void() -> p
+  theme_void() +
+  theme(legend.position = "none")-> p
 
 ggsave("Exp0863_test_sankey2.pdf", width = 10, height = 3)
 ```
 
+```{r}
+ggsankey_bw <- function( nodes, 
+                      x_variable = xvalue_final, 
+                      y_variable = yvalue_final,
+                      group_variable = dye,
+                      color_variable = dye_order_num,
+                      color_filter = "detect_ever == 1 & reject_buffer != 1",
+                      color_plot = TRUE,
+                      color_back = "#d9d9d9",
+                      color_front = "black"
+                      ) {
+
+  x_var <- enquo(x_variable)
+  y_var <- enquo(y_variable)
+  group_var <- enquo(group_variable)
+  color_var <- enquo(color_variable)
+  color_filter <- rlang::parse_expr(color_filter)
+  
+  nodes %>%
+      ungroup() %>%
+     filter(!!color_filter) %>%
+    
+ ggplot(     ) + 
+      geom_line(data = nodes,
+                 aes(x = !!x_var, y = !!y_var, group = !!group_var), size = 0.2, alpha = 0.7, color = color_back) -> p
+  
+  if (color_plot == TRUE) {
+    p +    geom_line( aes(x = !!x_var, y = !!y_var,  color = !!color_var , group = !!group_var),
+                 size = 0.3, alpha = 1) +
+    scale_color_viridis_c()
+  } else {
+
+    p + geom_line( aes(x = !!x_var, y = !!y_var,  color = !!color_var , group = !!group_var),
+                 size = 0.3, alpha = 1, color = color_front)
+  }
+
+}
+
+ nudged_nodes  %>% 
+  ggsankey_bw( . , 
+            color_filter = "Class == 'T'",
+            xvalue_final, yvalue_final,
+            color_plot = FALSE,
+            #  color_back = "red",
+            # color_front = "blue"
+            ) +
+            theme_void() +
+            theme(legend.position = "none")
+ 
+
+ nudged_nodes  %>% 
+  ggsankey_bw( . , 
+            color_filter = "Class == 'T'",
+            xvalue_final, yvalue_final,
+            color_plot = TRUE,
+            #  color_back = "red",
+            # color_front = "blue"
+            ) +
+            theme_void() +
+            theme(legend.position = "none")
+ 
+  nudged_nodes  %>% 
+  ggsankey_bw( . , 
+            color_filter = "dye == 'T004'",
+            xvalue_final, yvalue_final,
+            color_plot = FALSE,
+            #  color_back = "red",
+            # color_front = "blue"
+            ) +
+            theme_void() +
+            theme(legend.position = "none")
+
+```
 
 ```{r}
+ggsankey_all_color <- function( nodes, 
+                      x_variable = xvalue_final, 
+                      y_variable = yvalue_final,
+                      group_variable = dye,
+                      color_variable = dye_order_num,
+                      color_filter = "detect_ever == 1 & reject_buffer != 1"
+                      ) {
+
+  x_var <- enquo(x_variable)
+  y_var <- enquo(y_variable)
+  group_var <- enquo(group_variable)
+  color_var <- enquo(color_variable)
+  color_filter <- rlang::parse_expr(color_filter)
+  
+  nodes %>%
+      ungroup() %>%
+    # filter(!!color_filter) %>%
+    
+      ggplot(     ) + 
+    # 
+    #   geom_line(data = nodes,
+    #              aes(x = !!x_var, y = !!y_var, group = !!group_var), size = 0.2, alpha = 0.7, color = "#d9d9d9") +
+    # 
+    # geom_line(data = nodes %>% filter(reject_buffer == 1),
+    #             aes(x = !!x_var, y = !!y_var, group = !!group_var), size = 0.2, alpha = 0.7, color = "#525252") +
+      
+    geom_line( aes(x = !!x_var, y = !!y_var,  color = !!color_var , group = !!group_var), 
+                 size = 0.3, alpha = 1) +
+    
+    scale_color_viridis_c() 
+}
+
+  nudged_nodes  %>% 
+  ggsankey_all_color ( . , 
+            color_filter = "dye == 'T004'",
+            xvalue_final, yvalue_final,
+            #color_plot = FALSE,
+            #  color_back = "red",
+            # color_front = "blue"
+            ) +
+            theme_void() +
+            theme(legend.position = "none")
 ```
+
+
 
 
 
